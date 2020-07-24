@@ -1,0 +1,95 @@
+---
+title: "PS3"
+date: "11/13/2018"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    number_sections: yes
+
+---
+
+#Set-up
+
+```{r}
+library(tidyverse)
+library(haven)
+library(lfe)
+data <- read_dta("AganStarrQJEData.dta")
+```
+
+The average callback rate for people who committed crimes in 8.45% and the average callback for people who did not commit crimes is 13.6%. According to our unpaired t-test, this mean difference is statistically significantly different from 0. 
+
+```{r}
+crime <- data %>%
+  filter(crimbox == 1) %>%
+  filter(pre == 1) %>%
+  filter(remover != -1) %>%
+  filter(crime == 1)
+
+no_crime <- data %>%
+  filter(crimbox == 1) %>%
+  filter(pre == 1) %>%
+  filter(remover != -1) %>%
+  filter(crime == 0)
+
+t.test(x = crime$response, y = no_crime$response, var.equal = TRUE)
+```
+
+We can't interpret this as causal at this time. This is because there are many more factors affect receiving a positive application response such as education, past work experience, availability, etc. 
+
+Race does appear to have an effect on callback rates. Being white is associated with a 2.4% increase in receiving a positive response to an application in the box applications. This coefficient is significant by an alpha of 0.05. This coefficient does not have a causal interpretation. 
+
+```{r}
+data_box <- data %>%
+  filter(remover == 1)
+
+reg1 <- felm(response ~ white + ged + empgap | factor(center) + factor(cogroup_comb), data = data_box)
+summary(reg1)
+```
+
+The coefficient of the white variable does change but only slightly. It decreases by 0.0001. It is important to include chain and center fixed effects in order to account for unobservables that are time-invariant between different chain stores and stores in different geographic locations. Fixed effects accounts for this. 
+
+
+
+```{r}
+reg2 <- lm(response ~ white + ged + empgap, data = data_box)
+summary(reg2)
+```
+
+The coefficient of the white variable increases by 0.0007. It is possible that the previous regression was subjected to omitted variable bias because the coefficient of the newly included regressor is statistically significant and the adjusted R-squared term increased.  
+
+
+
+```{r}
+reg3 <- lm(response ~ white + ged + empgap + crime, data = data_box)
+summary(reg3)
+```
+
+
+
+```{r}
+data_pre <- data %>%
+  filter(pre == 1)
+
+covariates_pre <- as.matrix(data_pre$ged +  data_pre$empgap)
+
+reg4 <- felm(response ~ crimbox + white + box_white + covariates_pre | factor(center), data = data_pre)
+summary(reg4)
+```
+
+
+The coefficient on "crimbox" is not statistically significant by an alpha of 0.05. The coefficient on "white" and of the coefficient of the interaction of "crimbox" and "white" is statisitically significant by an alpha of 0.05. This suggests including a criminal record box on the application did not affect the likelihood of receiving a positive response but that being white and the race gap is a siginificant factor in the likelihood of receiving a positive response. 
+
+Based on the coefficients, being white is associated a 4% increase in the probability of receiving a positive application response. In addition, when employers had the criminal record box, the race gap was 3.3 percentage points smaller than after it was removed. These coefficients are statistically significant. The coefficient of having a criminal record box itself is not statisically significant. 
+
+```{r}
+covariates_box <- as.matrix(data_box$ged, data_box$empgap)
+
+reg5 <- felm(response ~ crimbox + white + box_white + covariates_box | factor(center), data = data_box)
+summary(reg5)
+
+```
+
+Based on the above analysis, I conclude that BTB negatively affects black applicants. This is because, based on the coefficient of the interaction term, we see an increase in the race gap from the pre to post BTB periods for those applications that did originally include a criminal record box. According to the literature, this could be because without the box, employers rely on racial stereotypes to make positive application decisions without explicit criminal record information. 
+
